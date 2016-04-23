@@ -9,7 +9,7 @@ The official copy of this repository is hosted at
 
 All changes must go through the Gerrit code review server on
 <https://chromium-review.googlesource.com>.  Please see the
-[HACK.md](HACK.md) document in this directory for details on submitting
+[HACK.md](/HACK.md) document in this directory for details on submitting
 patches.
 
 # Building from source
