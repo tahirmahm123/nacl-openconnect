@@ -1,0 +1,34 @@
+From cdf86434c0485f0755c0cb949c729353a032ffd2 Mon Sep 17 00:00:00 2001
+From: Kevin Cernekee <cernekee@gmail.com>
+Date: Sun, 10 Apr 2016 19:19:24 -0700
+Subject: [PATCH 4/8] Allow OC_CMD_PAUSE to abort connection attempts
+
+Currently OC_CMD_PAUSE does not abort connection attempts in all cases.
+One example of this can be seen in openssl.c:openconnect_open_https(),
+which can get stuck forever if the socket hangs.
+
+Change the helper function so that either OC_CMD_PAUSE or OC_CMD_CANCEL
+exits the mainloop; the main difference is whether it is handled as a
+temporary or permanent disconnection.
+
+Signed-off-by: Kevin Cernekee <cernekee@gmail.com>
+---
+ ssl.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/ssl.c b/ssl.c
+index 55a1ecd..c82a22e 100644
+--- a/ssl.c
++++ b/ssl.c
+@@ -806,7 +806,7 @@ void check_cmd_fd(struct openconnect_info *vpninfo, fd_set *fds)
+ int is_cancel_pending(struct openconnect_info *vpninfo, fd_set *fds)
+ {
+ 	check_cmd_fd(vpninfo, fds);
+-	return vpninfo->got_cancel_cmd;
++	return vpninfo->got_cancel_cmd || vpninfo->got_pause_cmd;
+ }
+ 
+ void poll_cmd_fd(struct openconnect_info *vpninfo, int timeout)
+-- 
+1.9.1
+

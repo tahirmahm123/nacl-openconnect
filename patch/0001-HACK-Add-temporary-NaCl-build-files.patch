@@ -1,0 +1,68 @@
+From b9853949e4d104af89ea9530a5b4525c80015859 Mon Sep 17 00:00:00 2001
+From: Kevin Cernekee <cernekee@gmail.com>
+Date: Fri, 22 Apr 2016 18:53:13 -0700
+Subject: [PATCH 1/8] HACK: Add temporary NaCl build files
+
+Signed-off-by: Kevin Cernekee <cernekee@gmail.com>
+---
+ build.sh | 36 ++++++++++++++++++++++++++++++++++++
+ pkg_info |  4 ++++
+ 2 files changed, 40 insertions(+)
+ create mode 100644 build.sh
+ create mode 100644 pkg_info
+
+diff --git a/build.sh b/build.sh
+new file mode 100644
+index 0000000..c2394ed
+--- /dev/null
++++ b/build.sh
+@@ -0,0 +1,36 @@
++# Copyright (c) 2016 The Native Client Authors. All rights reserved.
++# Use of this source code is governed by a BSD-style license that can be
++# found in the LICENSE file.
++
++EnableGlibcCompat
++EnableCliMain
++
++EXTRA_CONFIGURE_ARGS+="
++  --disable-shared
++  --enable-static
++  --with-vpnc-script=/bin/false
++  --without-gnutls
++  --with-openssl
++  --with-lz4"
++
++# Normally -lglibc-compat appears before -lgnutls, resulting in unresolved
++# symbols.  Hack around this:
++# NACLPORTS_LIBS+=" -lgnutls -lglibc-compat"
++
++EXECUTABLES=openconnect${NACL_EXEEXT}
++
++PatchStep() {
++	LogExecute rm -rf ${SRC_DIR}
++	LogExecute cp -a ${START_DIR} ${SRC_DIR}
++}
++
++ConfigureStep() {
++	ChangeDir ${SRC_DIR}
++	LogExecute bash autogen.sh
++	cd -
++
++	# Force pkg-config to honor Libs.private and Requires.private fields
++	export PKG_CONFIG="${PKG_CONFIG:-pkg-config} --static"
++
++	DefaultConfigureStep
++}
+diff --git a/pkg_info b/pkg_info
+new file mode 100644
+index 0000000..52a212d
+--- /dev/null
++++ b/pkg_info
+@@ -0,0 +1,4 @@
++NAME=openconnect
++LICENSE=LGPL2.1
++#DEPENDS=(glibc-compat libxml2 openssl zlib lz4 stoken)
++VERSION=master
+-- 
+1.9.1
+

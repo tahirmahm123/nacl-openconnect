@@ -1,0 +1,13 @@
+*.bc
+*.pexe
+tags
+.*.sw*
+crx/
+*.crx
+buildcfg.js
+
+# external packages (or symlinks)
+depot_tools
+nacl_sdk
+webports
+openconnect
