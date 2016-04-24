@@ -40,7 +40,7 @@ export NACL_SDK_ROOT NACL_ARCH TOOLCHAIN
 
 CXXFLAGS += -I$(NACL_SDK_ROOT)/include
 LDFLAGS := -L$(NACL_SDK_ROOT)/lib/$(HEADER_DIR)/Release \
-	-lopenconnect -lz -llz4 -lstoken -lssl -lcrypto -lxml2 -lpthread \
+	-lopenconnect -lz -llz4 -lstoken -lgnutls -lxml2 -lpthread \
 	-lm -lhogweed -lgmp -lnettle \
 	-lnacl_io -lglibc-compat -lppapi -lppapi_cpp
 
@@ -83,7 +83,7 @@ webports/.installed: depot_tools/.installed nacl_sdk/.installed
 			https://chromium.googlesource.com/webports.git && \
 		$(GCLIENT) sync --with_branch_heads
 	cd webports/src && ./bin/webports install \
-		glibc-compat libxml2 openssl zlib lz4 stoken
+		glibc-compat libxml2 gnutls zlib lz4 stoken
 	touch $@
 
 openconnect/.sources:

@@ -28,13 +28,13 @@ index 0000000..c2394ed
 +  --disable-shared
 +  --enable-static
 +  --with-vpnc-script=/bin/false
-+  --without-gnutls
-+  --with-openssl
++  --with-gnutls
++  --without-openssl
 +  --with-lz4"
 +
 +# Normally -lglibc-compat appears before -lgnutls, resulting in unresolved
 +# symbols.  Hack around this:
-+# NACLPORTS_LIBS+=" -lgnutls -lglibc-compat"
++NACLPORTS_LIBS+=" -lgnutls -lglibc-compat"
 +
 +EXECUTABLES=openconnect${NACL_EXEEXT}
 +
