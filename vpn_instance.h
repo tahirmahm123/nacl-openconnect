@@ -22,6 +22,9 @@
 #include "ppapi/cpp/var_array_buffer.h"
 #include "ppapi/cpp/var_dictionary.h"
 
+#include "crypto.h"
+#include "crypto_callback.h"
+
 namespace vpn_nacl {
 
 const int kMaxPkt = 1536;
@@ -42,14 +45,30 @@ typedef enum {
   kStatePaused,
 } MainloopState;
 
-class VpnInstance : public pp::Instance {
+class VpnInstance : public pp::Instance,
+                    public CryptoCallback {
  public:
   explicit VpnInstance(PP_Instance instance);
   virtual ~VpnInstance() {}
-  virtual void HandleMessage(const pp::Var& var_message);
+
+  virtual void HandleMessage(const pp::Var& var_message) override;
+
+  int CryptoGetCert(std::string& sha256,
+                    void** cert_der,
+                    size_t* cert_der_len) override;
+  int CryptoGetPrivkey(std::string& sha256,
+                       std::string* pk_algorithm,
+                       std::string* sign_algorithm) override;
+  int CryptoSign(std::string& sha256,
+                 void* raw_data,
+                 size_t raw_data_len,
+                 void** signature,
+                 size_t* signature_len) override;
+  void CryptoAbort(const char* fmt, va_list ap) override;
 
  protected:
   pp::Core* core_;
+  Crypto* crypto_;
 
   pthread_t rx_thread_;
   std::queue<pp::VarArrayBuffer*> rx_queue_;
@@ -102,6 +121,11 @@ class VpnInstance : public pp::Instance {
   void TranslateOpt(struct oc_form_opt* opt, pp::VarDictionary& opt_dict);
   int TranslateAuthResult(pp::VarDictionary* dict, struct oc_auth_form* form);
   void SendAuthResult(pp::VarDictionary* dict);
+
+  pthread_cond_t crypto_result_ready_;
+  pthread_mutex_t crypto_result_mutex_;
+  pp::VarDictionary* crypto_result_;
+  void SendCryptoResult(pp::VarDictionary* dict);
 
   // Library->VpnInstance callbacks
 

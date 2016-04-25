@@ -13,7 +13,7 @@ GCLIENT ?= $(TOPDIR)/depot_tools/gclient
 
 # Project Build flags
 WARNINGS := -Wall -Wextra -Wno-unused-parameter
-CXXFLAGS := -pthread $(WARNINGS)
+CXXFLAGS := -O2 -std=gnu++0x -pthread $(WARNINGS)
 
 #
 # Compute tool paths
@@ -46,6 +46,9 @@ LDFLAGS := -L$(NACL_SDK_ROOT)/lib/$(HEADER_DIR)/Release \
 
 KEY := $(TOPDIR)/../openconnect.pem
 SHELL := /bin/bash
+
+SRCS := vpn_module.cc vpn_instance.cc crypto.cc
+HDRS := vpn_module.h vpn_instance.h crypto.h crypto_callback.h
 
 # Declare the ALL target first, to make the 'all' target the default build
 .PHONY: all
@@ -111,12 +114,11 @@ clean:
 distclean: clean
 	rm -rf depot_tools webports nacl_sdk openconnect
 
-openconnect.bc: vpn_module.cc vpn_module.h vpn_instance.cc vpn_instance.cc \
-		openconnect/.installed
-	$(NACL_CXX) -o $@ vpn_module.cc vpn_instance.cc -O2 $(CXXFLAGS) $(LDFLAGS)
+openconnect.bc: $(SRCS) $(HDRS) openconnect/.installed
+	$(NACL_CXX) -o $@ $(SRCS) $(CXXFLAGS) $(LDFLAGS)
 
-openconnect.nexe: vpn_module.cc vpn_module.h vpn_instance.cc vpn_instance.h
-	$(NACL_CXX) -o $@ $^ -O2 $(CXXFLAGS) $(LDFLAGS)
+openconnect.nexe: $(SRCS) $(HDRS)
+	$(NACL_CXX) -o $@ $(SRCS) $(CXXFLAGS) $(LDFLAGS)
 	echo "var buildcfg = { portable: false };" > buildcfg.js
 
 openconnect.pexe: openconnect.bc

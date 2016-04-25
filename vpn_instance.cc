@@ -46,6 +46,9 @@ const char* const kDisconnect = "disconnect";
 const char* const kPause = "pause";
 const char* const kResume = "resume";
 const char* const kReconnect = "reconnect";
+const char* const kCryptoGetCert = "crypto-getcert";
+const char* const kCryptoGetPrivkey = "crypto-getprivkey";
+const char* const kCryptoSign = "crypto-sign";
 
 // nacl -> js
 const char* const kStatus = "status";
@@ -124,6 +127,12 @@ const char* const kCertChain = "cert_chain";
 const char* const kCertHash = "cert_hash";
 const char* const kAccept = "accept";
 
+// crypto fields
+const char* const kHash = "hash";
+const char* const kClientCert = "client_cert";
+const char* const kSuccess = "success";
+const char* const kPrivkeyType = "privkey_type";
+
 // misc constants
 const int kReconnectTimeout = 180;
 const int kReconnectInterval = 5;
@@ -140,8 +149,14 @@ VpnInstance::VpnInstance(PP_Instance instance) :
   InitBackgroundThreads();
 
   pthread_mutex_init(&lib_mutex_, NULL);
+
   pthread_cond_init(&auth_result_ready_, NULL);
   pthread_mutex_init(&auth_result_mutex_, NULL);
+
+  pthread_cond_init(&crypto_result_ready_, NULL);
+  pthread_mutex_init(&crypto_result_mutex_, NULL);
+
+  crypto_ = new Crypto(this);
 }
 
 void VpnInstance::HandleMessage(const pp::Var& var_message) {
@@ -174,6 +189,11 @@ void VpnInstance::HandleMessage(const pp::Var& var_message) {
     // stored in auth_result_
     SendAuthResult(dict);
     return;
+  } else if (cmd == kCryptoGetCert || cmd == kCryptoGetPrivkey ||
+             cmd == kCryptoSign) {
+    // stored in crypto_result_
+    SendCryptoResult(dict);
+    return;
   } else if (cmd == kDisconnect) {
     SetDesiredState(kStateDisconnected);
     SendCommand(OC_CMD_CANCEL);
@@ -191,6 +211,107 @@ void VpnInstance::HandleMessage(const pp::Var& var_message) {
   }
 
   delete dict;
+}
+
+int VpnInstance::CryptoGetCert(std::string& sha256,
+                               void** cert_der,
+                               size_t* cert_der_len) {
+  pp::VarDictionary cmd_dict;
+
+  cmd_dict.Set(kCmd, kCryptoGetCert);
+  cmd_dict.Set(kHash, sha256);
+
+  pthread_mutex_lock(&crypto_result_mutex_);
+  PostMessage(cmd_dict);
+  pthread_cond_wait(&crypto_result_ready_, &crypto_result_mutex_);
+
+  *cert_der = nullptr;
+  pp::Var cert_der_var = crypto_result_->Get(kData);
+  if (cert_der_var.is_array_buffer()) {
+    pp::VarArrayBuffer buf(cert_der_var);
+    *cert_der_len = buf.ByteLength();
+    *cert_der = malloc(*cert_der_len);
+    if (*cert_der) {
+      memcpy(*cert_der, buf.Map(), *cert_der_len);
+    }
+  }
+
+  delete crypto_result_;
+  crypto_result_ = nullptr;
+  pthread_mutex_unlock(&crypto_result_mutex_);
+
+  return *cert_der ? 0 : -1;
+}
+
+int VpnInstance::CryptoGetPrivkey(std::string& sha256,
+                                  std::string* pk_algorithm,
+                                  std::string* sign_algorithm) {
+  pp::VarDictionary cmd_dict;
+
+  cmd_dict.Set(kCmd, kCryptoGetPrivkey);
+  cmd_dict.Set(kHash, sha256);
+
+  pthread_mutex_lock(&crypto_result_mutex_);
+  PostMessage(cmd_dict);
+  pthread_cond_wait(&crypto_result_ready_, &crypto_result_mutex_);
+
+  int ret = -1;
+  if (crypto_result_->Get(kSuccess).AsBool()) {
+    *pk_algorithm = crypto_result_->Get(kPrivkeyType).AsString();
+    ret = 0;
+  }
+
+  delete crypto_result_;
+  crypto_result_ = nullptr;
+  pthread_mutex_unlock(&crypto_result_mutex_);
+
+  return ret;
+}
+
+int VpnInstance::CryptoSign(std::string& sha256,
+                            void* raw_data,
+                            size_t raw_data_len,
+                            void** signature,
+                            size_t* signature_len) {
+  pp::VarDictionary cmd_dict;
+
+  cmd_dict.Set(kCmd, kCryptoSign);
+  cmd_dict.Set(kHash, sha256);
+
+  pp::VarArrayBuffer raw_data_var(raw_data_len);
+  memcpy(raw_data_var.Map(), raw_data, raw_data_len);
+  cmd_dict.Set(kData, raw_data_var);
+
+  pthread_mutex_lock(&crypto_result_mutex_);
+  PostMessage(cmd_dict);
+  pthread_cond_wait(&crypto_result_ready_, &crypto_result_mutex_);
+
+  *signature = nullptr;
+  pp::Var sig_var = crypto_result_->Get(kData);
+  if (sig_var.is_array_buffer()) {
+    pp::VarArrayBuffer buf(sig_var);
+    *signature_len = buf.ByteLength();
+    *signature = malloc(*signature_len);
+    if (*signature)
+      memcpy(*signature, buf.Map(), *signature_len);
+  }
+
+  delete crypto_result_;
+  crypto_result_ = nullptr;
+  pthread_mutex_unlock(&crypto_result_mutex_);
+
+  return *signature ? 0 : -1;
+}
+
+void VpnInstance::SendCryptoResult(pp::VarDictionary* dict) {
+  pthread_mutex_lock(&crypto_result_mutex_);
+  if (crypto_result_) {
+    Log(kError, "crypto_result_ is already set");
+    delete crypto_result_;
+  }
+  crypto_result_ = dict;
+  pthread_cond_signal(&crypto_result_ready_);
+  pthread_mutex_unlock(&crypto_result_mutex_);
 }
 
 void VpnInstance::SimpleMessage(const char* const cmd,
@@ -240,6 +361,10 @@ void VpnInstance::Log(VpnLogLevel level, const char* fmt, ...) {
   va_start(ap, fmt);
   VLog(level, fmt, ap);
   va_end(ap);
+}
+
+void VpnInstance::CryptoAbort(const char* fmt, va_list ap) {
+  VLog(kFatal, fmt, ap);
 }
 
 void VpnInstance::InitBackgroundThreads() {
@@ -678,6 +803,14 @@ void VpnInstance::ConnectionThread() {
   if (openconnect_parse_url(oc_, url.c_str()) < 0) {
     Log(kFatal, "Can't parse URL '%s'", url.c_str());
     return;
+  }
+
+  pp::Var cert_var = connect_options_->Get(kClientCert);
+  if (cert_var.is_string()) {
+    const char* cert_url = cert_var.AsString().c_str();
+    if (openconnect_set_client_cert(oc_, cert_url, cert_url)) {
+      Log(kFatal, "Error setting cert URL '%s'", cert_url);
+    }
   }
 
   openconnect_set_system_trust(oc_, 0);

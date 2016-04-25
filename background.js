@@ -155,6 +155,63 @@ function handleAuthForm(d) {
   }
 }
 
+function handleCrypto(d) {
+  chrome.platformKeys.selectClientCertificates({
+    interactive: false,
+    request: {
+      certificateTypes: [ "rsaSign" ],
+      certificateAuthorities: []
+    }
+  }, function(certlist) {
+    // TODO: pick the right cert here
+    if (certlist.length === 0) {
+      postMessage({"cmd": d.cmd, "success": false});
+      return;
+    }
+    var cert = certlist[0].certificate;
+
+    if (d.cmd === "crypto-getcert") {
+      postMessage({"cmd": d.cmd, "data": cert});
+      return;
+    }
+
+    var keyParams = {
+      hash: {
+        name: "none"
+      },
+      name: "RSASSA-PKCS1-v1_5"
+    };
+    chrome.platformKeys.getKeyPair(cert, keyParams,
+        function(pubKey, privKey) {
+      if (privKey === null) {
+        console.error("no private key for " + d.hash);
+        postMessage({"cmd": d.cmd, "success": false});
+        return;
+      }
+
+      if (d.cmd === "crypto-getprivkey") {
+        postMessage({
+          "cmd": d.cmd,
+          "success": true,
+          "privkey_type": privKey.algorithm.name
+        });
+        return;
+      }
+
+      // else: d.cmd === "crypto-sign"
+
+      var sc = chrome.platformKeys.subtleCrypto();
+      var future = sc.sign(privKey.algorithm, privKey, new Uint8Array(d.data));
+      future.then(function(result) {
+        postMessage({"cmd": d.cmd, "data": result});
+      }, function() {
+        console.error("crypto-sign failed");
+        postMessage({"cmd": d.cmd, /* "data" is null */});
+      });
+    });
+  });
+}
+
 function handleMessage(m) {
   var d = m.data;
   if (d instanceof ArrayBuffer) {
@@ -170,6 +227,8 @@ function handleMessage(m) {
       handleCertValidation(d);
     } else if (cmd === "auth_form") {
       handleAuthForm(d);
+    } else if (cmd.startsWith("crypto-")) {
+      handleCrypto(d);
     } else if (cmd === "abort") {
       advanceStateMachine("nacl_disconnected");
     } else {

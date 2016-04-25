@@ -1,0 +1,40 @@
+From 20fbdaabb9a4f1a126dd2f217f51c585ba33bb53 Mon Sep 17 00:00:00 2001
+From: Kevin Cernekee <cernekee@gmail.com>
+Date: Sun, 24 Apr 2016 21:00:25 -0700
+Subject: [PATCH] Load "app:" keys by URL
+
+Chrome OS supports the notion of hardware-bound system keys, but it
+doesn't provide APIs that can be called directly by GnuTLS or p11kit.
+Instead, the application's NaCl module needs to pass certificate
+queries and signing requests back to JavaScript code that invokes the
+chrome.platformKeys APIs.  This is implemented by registering a handler
+for URLs starting with the (somewhat arbitrarily chosen) "app:" prefix.
+
+Allow openconnect to recognize these URLs and handle them through the
+same code paths as "system:" URLs.
+
+Signed-off-by: Kevin Cernekee <cernekee@gmail.com>
+---
+ gnutls.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/gnutls.c b/gnutls.c
+index 338f7a7..544fb51 100644
+--- a/gnutls.c
++++ b/gnutls.c
+@@ -1001,8 +1001,10 @@ static int load_certificate(struct openconnect_info *vpninfo)
+ 
+ 	key_is_p11 = !strncmp(vpninfo->sslkey, "pkcs11:", 7);
+ 	cert_is_p11 = !strncmp(vpninfo->cert, "pkcs11:", 7);
+-	key_is_sys = !strncmp(vpninfo->sslkey, "system:", 7);
+-	cert_is_sys = !strncmp(vpninfo->cert, "system:", 7);
++	key_is_sys = !strncmp(vpninfo->sslkey, "system:", 7) ||
++		     !strncmp(vpninfo->sslkey, "app:", 4);
++	cert_is_sys = !strncmp(vpninfo->cert, "system:", 7) ||
++		      !strncmp(vpninfo->cert, "app:", 4);
+ 
+ #ifndef HAVE_GNUTLS_SYSTEM_KEYS
+ 	if (key_is_sys || cert_is_sys) {
+-- 
+1.9.1
+
