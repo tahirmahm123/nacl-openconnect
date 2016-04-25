@@ -17,7 +17,7 @@ index 0000000..c2394ed
 --- /dev/null
 +++ b/build.sh
 @@ -0,0 +1,36 @@
-+# Copyright (c) 2016 The Native Client Authors. All rights reserved.
++# Copyright 2016 The Chromium Authors. All rights reserved.
 +# Use of this source code is governed by a BSD-style license that can be
 +# found in the LICENSE file.
 +
