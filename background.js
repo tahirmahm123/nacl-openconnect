@@ -21,6 +21,19 @@ var vpnOwned_ = false;
 // user's VPN configuration (URL, username, etc.)
 var config_;
 
+function sha256(der) {
+  return crypto.subtle.digest("SHA-256", der).then(function(digest) {
+    var a = new Uint8Array(digest);
+    var ret = "";
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] < 0x10)
+        ret += "0";
+      ret += a[i].toString(16);
+    }
+    return ret;
+  });
+}
+
 function startNative() {
   if (nacl_ !== null)
     return;
@@ -163,51 +176,63 @@ function handleCrypto(d) {
       certificateAuthorities: []
     }
   }, function(certlist) {
-    // TODO: pick the right cert here
     if (certlist.length === 0) {
       postMessage({"cmd": d.cmd, "success": false});
       return;
     }
-    var cert = certlist[0].certificate;
+    for (var i = 0; i < certlist.length; i++) {
+      testOneCert(d, certlist[i].certificate);
+    }
+  });
+}
 
-    if (d.cmd === "crypto-getcert") {
-      postMessage({"cmd": d.cmd, "data": cert});
+function testOneCert(d, cert) {
+  sha256(cert).then(function(digest) {
+    if (config_.clientCert === digest) {
+      console.debug("testOneCert: found " + digest);
+      if (d.cmd === "crypto-getcert") {
+        postMessage({"cmd": d.cmd, "data": cert});
+        return;
+      } else {
+        handlePrivkeySign(d, cert);
+      }
+    }
+  });
+}
+
+function handlePrivkeySign(d, cert) {
+  var keyParams = {
+    hash: {
+      name: "none"
+    },
+    name: "RSASSA-PKCS1-v1_5"
+  };
+  chrome.platformKeys.getKeyPair(cert, keyParams,
+      function(pubKey, privKey) {
+    if (privKey === null) {
+      console.error("no private key for " + d.hash);
+      postMessage({"cmd": d.cmd, "success": false});
       return;
     }
 
-    var keyParams = {
-      hash: {
-        name: "none"
-      },
-      name: "RSASSA-PKCS1-v1_5"
-    };
-    chrome.platformKeys.getKeyPair(cert, keyParams,
-        function(pubKey, privKey) {
-      if (privKey === null) {
-        console.error("no private key for " + d.hash);
-        postMessage({"cmd": d.cmd, "success": false});
-        return;
-      }
-
-      if (d.cmd === "crypto-getprivkey") {
-        postMessage({
-          "cmd": d.cmd,
-          "success": true,
-          "privkey_type": privKey.algorithm.name
-        });
-        return;
-      }
-
-      // else: d.cmd === "crypto-sign"
-
-      var sc = chrome.platformKeys.subtleCrypto();
-      var future = sc.sign(privKey.algorithm, privKey, new Uint8Array(d.data));
-      future.then(function(result) {
-        postMessage({"cmd": d.cmd, "data": result});
-      }, function() {
-        console.error("crypto-sign failed");
-        postMessage({"cmd": d.cmd, /* "data" is null */});
+    if (d.cmd === "crypto-getprivkey") {
+      postMessage({
+        "cmd": d.cmd,
+        "success": true,
+        "privkey_type": privKey.algorithm.name
       });
+      return;
+    }
+
+    // else: d.cmd === "crypto-sign"
+
+    var sc = chrome.platformKeys.subtleCrypto();
+    var future = sc.sign(privKey.algorithm, privKey, new Uint8Array(d.data));
+    future.then(function(result) {
+      postMessage({"cmd": d.cmd, "data": result});
+    }, function() {
+      console.error("crypto-sign failed");
+      postMessage({"cmd": d.cmd, /* "data" is null */});
     });
   });
 }
@@ -258,7 +283,14 @@ function lookupConfig(id, callback) {
 
 function doConnect() {
   startNative();
-  postMessage({"cmd": "connect", "url": config_.url});
+  var msg = {
+    "cmd": "connect",
+    "url": config_.url
+  };
+  if (config_.clientCert !== undefined) {
+    msg.client_cert = "app:" + config_.clientCert;
+  }
+  postMessage(msg);
 }
 
 function clearRetryTimer() {
@@ -399,6 +431,7 @@ function openSettings() {
     }
   }, function(createdWindow) {
     createdWindow.contentWindow.reloadConfig = reloadConfig;
+    createdWindow.contentWindow.sha256 = sha256;
   });
 }
 

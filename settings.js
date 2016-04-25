@@ -4,7 +4,7 @@
 
 "use strict";
 
-var foo;
+var clientCert = undefined;
 
 function enableSave() {
   var button = $("#save");
@@ -24,7 +24,8 @@ function saveChanges() {
   var conn = {
     "url": $("#url").val(),
     "username": $("#username").val(),
-    "password": $("#password").val()
+    "password": $("#password").val(),
+    "clientCert": clientCert
   };
   chrome.storage.local.set({"connection": conn}, function() {
     disableSave();
@@ -32,8 +33,43 @@ function saveChanges() {
   });
 }
 
+function setCert(digest) {
+  if (digest === undefined) {
+    $("#selected-cert").html("No certificate selected");
+    clientCert = undefined;
+  } else {
+    $("#selected-cert").html(digest);
+    clientCert = digest;
+  }
+}
+
+function selectCert() {
+  chrome.platformKeys.selectClientCertificates({
+    interactive: true,
+    request: {
+      certificateTypes: [ "rsaSign" ],
+      certificateAuthorities: []
+    }
+  }, function(certlist) {
+    if (certlist.length === 0) {
+      if (clientCert !== undefined) {
+        enableSave();
+      }
+      setCert(undefined);
+    } else {
+      sha256(certlist[0].certificate).then(function(digest) {
+        if (clientCert !== digest) {
+          enableSave();
+        }
+        setCert(digest);
+      });
+    }
+  });
+}
+
 $(document).ready(function() {
   disableSave();
+  $("#select-cert").click(selectCert);
   $("#save").click(saveChanges);
   $("#cancel").click(function() { window.close(); });
   $("input").keyup(enableSave);
@@ -44,6 +80,7 @@ $(document).ready(function() {
       $("#url").val(conn.url);
       $("#username").val(conn.username);
       $("#password").val(conn.password);
+      setCert(conn.clientCert);
     }
   });
 });
