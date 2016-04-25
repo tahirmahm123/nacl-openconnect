@@ -46,6 +46,7 @@ const char* const kDisconnect = "disconnect";
 const char* const kPause = "pause";
 const char* const kResume = "resume";
 const char* const kReconnect = "reconnect";
+const char* const kCmdDebug = "debug";
 const char* const kCryptoGetCert = "crypto-getcert";
 const char* const kCryptoGetPrivkey = "crypto-getprivkey";
 const char* const kCryptoSign = "crypto-sign";
@@ -145,7 +146,7 @@ VpnInstance::VpnInstance(PP_Instance instance) :
     pp::Instance(instance) {
   nacl_io_init_ppapi(instance, pp::Module::Get()->get_browser_interface());
   core_ = pp::Module::Get()->core();
-  debug_enabled_ = false; // XXX
+  debug_enabled_ = false;
   InitBackgroundThreads();
 
   pthread_mutex_init(&lib_mutex_, NULL);
@@ -206,6 +207,8 @@ void VpnInstance::HandleMessage(const pp::Var& var_message) {
     // i.e. drop connection, then immediate reinstate it
     SetDesiredState(kStateRunning);
     SendCommand(OC_CMD_PAUSE);
+  } else if (cmd == kCmdDebug) {
+    debug_enabled_ = dict->Get(kData).AsBool();
   } else {
     Log(kError, "unrecognized command '%s'", cmd.c_str());
   }
