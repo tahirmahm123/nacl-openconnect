@@ -1,4 +1,4 @@
-From b9853949e4d104af89ea9530a5b4525c80015859 Mon Sep 17 00:00:00 2001
+From c2f5cb9d2c48208f7042cfa7b1d0947d37ddbd2c Mon Sep 17 00:00:00 2001
 From: Kevin Cernekee <cernekee@gmail.com>
 Date: Fri, 22 Apr 2016 18:53:13 -0700
 Subject: [PATCH 1/8] HACK: Add temporary NaCl build files
@@ -13,7 +13,7 @@ Signed-off-by: Kevin Cernekee <cernekee@gmail.com>
 
 diff --git a/build.sh b/build.sh
 new file mode 100644
-index 0000000..c2394ed
+index 0000000..01a1166
 --- /dev/null
 +++ b/build.sh
 @@ -0,0 +1,36 @@

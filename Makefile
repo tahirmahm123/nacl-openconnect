@@ -11,6 +11,8 @@ NACL_SDK_ROOT ?= $(TOPDIR)/nacl_sdk/pepper_canary
 WEBPORTS ?= $(TOPDIR)/webports/src/bin/webports
 GCLIENT ?= $(TOPDIR)/depot_tools/gclient
 
+LIBOPENCONNECT_COMMIT := 489cb6c1023dac9d003f82cd70a7285108e5f110
+
 # Project Build flags
 WARNINGS := -Wall -Wextra -Wno-unused-parameter
 CXXFLAGS := -O2 -std=gnu++0x -pthread $(WARNINGS)
@@ -93,7 +95,7 @@ openconnect/.sources:
 	rm -rf openconnect
 	git clone git://git.infradead.org/users/dwmw2/openconnect.git
 	cd openconnect && \
-		git checkout 11ad105e8000af52e1d4b73b539b8d21c2ae141a && \
+		git checkout $(LIBOPENCONNECT_COMMIT) && \
 		git am -3 $(TOPDIR)/patch/*.patch
 	touch $@
 
