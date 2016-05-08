@@ -31,9 +31,6 @@
 #include "ppapi/cpp/var_array_buffer.h"
 #include "ppapi/cpp/var_dictionary.h"
 
-#define NEW_OC_API 1
-#define GETNAMEINFO_WORKS 1
-
 namespace {
 
 // keys
@@ -698,42 +695,6 @@ void VpnInstance::ProgressCb(void* privdata, int level, const char* fmt, ...) {
   va_end(ap);
 }
 
-// TODO: implement getnameinfo() in libnacl_io so we can remove this hack
-int VpnInstance::GetAddrInfo(const char* node,
-                             const char* service,
-                             const struct addrinfo* hints,
-                             struct addrinfo** res) {
-  int ret = getaddrinfo(node, service, hints, res);
-  if (ret)
-    return ret;
-
-  struct addrinfo* ai;
-  gateway_ips_.clear();
-  for (ai = *res; ai; ai = ai->ai_next) {
-    char str[INET_ADDRSTRLEN];
-
-    if (ai->ai_family == AF_INET) {
-      struct sockaddr_in* s =
-          reinterpret_cast<struct sockaddr_in*>(ai->ai_addr);
-      inet_ntop(AF_INET, &s->sin_addr, str, sizeof(str));
-      gateway_ips_.push_back(str);
-    } else if (ai->ai_family == AF_INET6) {
-      // TODO: support IPv6
-    }
-  }
-
-  return 0;
-}
-
-int VpnInstance::GetAddrInfo(void* privdata,
-                             const char* node,
-                             const char* service,
-                             const struct addrinfo* hints,
-                             struct addrinfo** res) {
-  VpnInstance* self = static_cast<VpnInstance*>(privdata);
-  return self->GetAddrInfo(node, service, hints, res);
-}
-
 void VpnInstance::SendIpInfo(const struct oc_ip_info* ip_info)
 {
   pp::VarDictionary dict;
@@ -786,13 +747,7 @@ void VpnInstance::SendIpInfo(const struct oc_ip_info* ip_info)
   dict.Set(kSplitExcludes, split_excludes);
 
   pp::VarArray gateway_ips;
-#if NEW_OC_API && GETNAMEINFO_WORKS
   gateway_ips.Set(0, ip_info->gateway_addr);
-#else
-  std::vector<std::string>::iterator it;
-  for (it = gateway_ips_.begin(), i = 0; it != gateway_ips_.end(); it++)
-    gateway_ips.Set(i++, *it);
-#endif
   dict.Set(kGatewayIps, gateway_ips);
 
   PostMessage(dict);
@@ -839,12 +794,8 @@ void VpnInstance::ConnectionThread() {
     return;
   }
 
-#if NEW_OC_API
   openconnect_set_setup_tun_handler(oc_, SetupTunCb);
   openconnect_set_reconnected_handler(oc_, ReconnectedCb);
-#else
-  SetupTunCb();
-#endif
 
   while (1) {
     pthread_mutex_lock(&desired_state_mutex_);
@@ -893,9 +844,6 @@ void VpnInstance::Connect(pp::VarDictionary* dict) {
     Log(kFatal, "unable to create library instance");
     return;
   }
-
-  if (!NEW_OC_API || !GETNAMEINFO_WORKS)
-    openconnect_override_getaddrinfo(oc_, &GetAddrInfo);
 
   connect_options_ = dict;
   gateway_ips_.clear();

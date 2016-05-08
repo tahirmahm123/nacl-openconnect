@@ -146,16 +146,6 @@ class VpnInstance : public pp::Instance,
 
   void ProgressCb(int level, const char* fmt, va_list ap);
   static void ProgressCb(void* privdata, int level, const char* fmt, ...);
-
-  int GetAddrInfo(const char* node,
-                  const char* service,
-                  const struct addrinfo* hints,
-                  struct addrinfo** res);
-  static int GetAddrInfo(void* privdata,
-                         const char* node,
-                         const char* service,
-                         const struct addrinfo* hints,
-                         struct addrinfo** res);
 };
 
 }  // namespace vpn_nacl
